@@ -1,12 +1,118 @@
 const express = require('express');
 const db = require('../database');
 const { authMiddleware } = require('../middleware/auth');
-const { addHours, parseISO } = require('date-fns');
+const { addHours, parseISO, addWeeks, isAfter, format, getDay } = require('date-fns');
 
 const router = express.Router();
 router.use(authMiddleware);
 
-// Get sessions for a date range
+// Create session (adhoc or recurring)
+router.post('/', (req, res) => {
+    try {
+        const { semester_id, course_id, date, start_time, end_time, repeat_weekly } = req.body;
+
+        if (!semester_id || !course_id || !date || !start_time || !end_time) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        // Verify bounds
+        const semester = db.prepare('SELECT * FROM semesters WHERE id = ? AND user_id = ?').get(semester_id, req.user.userId);
+        if (!semester) return res.status(404).json({ error: 'Semester not found' });
+
+        const course = db.prepare('SELECT * FROM courses WHERE id = ? AND semester_id = ?').get(course_id, semester_id);
+        if (!course) return res.status(404).json({ error: 'Course not found' });
+
+        const createSessions = db.transaction(() => {
+            const insert = db.prepare(`
+                INSERT INTO sessions (id, semester_id, course_id, date, start_time, end_time, status, type)
+                VALUES (?, ?, ?, ?, ?, ?, 'scheduled', 'manual')
+            `);
+
+            // 1. Insert the primary session
+            const crypto = require('crypto');
+            insert.run(crypto.randomUUID(), semester_id, course_id, date, start_time, end_time);
+
+            // 2. Propagate if requested
+            if (repeat_weekly) {
+                let currentDate = addWeeks(parseISO(date), 1);
+                const endDate = parseISO(semester.end_date);
+
+                while (!isAfter(currentDate, endDate)) {
+                    insert.run(
+                        crypto.randomUUID(),
+                        semester_id,
+                        course_id,
+                        format(currentDate, 'yyyy-MM-dd'),
+                        start_time,
+                        end_time
+                    );
+                    currentDate = addWeeks(currentDate, 1);
+                }
+            }
+        });
+
+        createSessions();
+        res.json({ message: 'Session(s) created successfully' });
+
+    } catch (error) {
+        console.error('Create session error:', error);
+        res.status(500).json({ error: 'Failed to create session' });
+    }
+});
+
+// Delete session (single or series)
+router.delete('/:id', (req, res) => {
+    try {
+        const { mode } = req.query; // 'single' or 'future'
+
+        const session = db.prepare(`
+            SELECT s.* FROM sessions s
+            JOIN semesters sem ON s.semester_id = sem.id
+            WHERE s.id = ? AND sem.user_id = ?
+        `).get(req.params.id, req.user.userId);
+
+        if (!session) return res.status(404).json({ error: 'Session not found' });
+
+        const deleteOp = db.transaction(() => {
+            if (mode === 'future') {
+                // Delete this session and all future sessions of same course/time
+                // We use course_id, start_time, end_time, and Day of Week logic to identify the series.
+                // However, strictly "same series" implies checking the day of week.
+                const targetDayOfWeek = getDay(parseISO(session.date));
+
+                // Find all candidates
+                const candidates = db.prepare(`
+                    SELECT * FROM sessions 
+                    WHERE course_id = ? 
+                    AND start_time = ? 
+                    AND end_time = ? 
+                    AND date >= ?
+                    AND semester_id = ?
+                `).all(session.course_id, session.start_time, session.end_time, session.date, session.semester_id);
+
+                // Filter by day of week in JS to be safe (sqlite strftime %w is 0-6, date-fns getDay is 0-6)
+                const idsToDelete = candidates
+                    .filter(s => getDay(parseISO(s.date)) === targetDayOfWeek)
+                    .map(s => s.id);
+
+                if (idsToDelete.length > 0) {
+                    const placeholders = idsToDelete.map(() => '?').join(',');
+                    db.prepare(`DELETE FROM sessions WHERE id IN (${placeholders})`).run(...idsToDelete);
+                }
+            } else {
+                // Single delete
+                db.prepare('DELETE FROM sessions WHERE id = ?').run(req.params.id);
+            }
+        });
+
+        deleteOp();
+        res.json({ message: 'Session(s) deleted successfully' });
+
+    } catch (error) {
+        console.error('Delete session error:', error);
+        res.status(500).json({ error: 'Failed to delete session' });
+    }
+});
 router.get('/', (req, res) => {
     try {
         const { semester_id, start_date, end_date, course_id, status } = req.query;
