@@ -340,40 +340,10 @@ export default function SemesterDetail() {
 
                 {/* Delete Confirmation Modal */}
                 {deleteTarget && (
-                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={() => setDeleteTarget(null)}>
-                        <div className="glass-card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-                            <h2 className="text-xl font-bold mb-2">Delete Session</h2>
-                            <p className="text-gray-400 mb-6">
-                                How would you like to delete this session?
-                            </p>
-
-                            <div className="space-y-3">
-                                <button
-                                    onClick={() => handleDeleteSession('single')}
-                                    className="w-full btn-secondary text-left flex items-center justify-between group"
-                                >
-                                    <span>Delete this instance only</span>
-                                    <Trash2 size={16} className="text-gray-400 group-hover:text-red-400" />
-                                </button>
-                                <button
-                                    onClick={() => handleDeleteSession('future')}
-                                    className="w-full btn-secondary text-left flex items-center justify-between group"
-                                >
-                                    <span>Delete this and all future instances</span>
-                                    <Trash2 size={16} className="text-gray-400 group-hover:text-red-400" />
-                                </button>
-                            </div>
-
-                            <div className="flex justify-end mt-6">
-                                <button
-                                    onClick={() => setDeleteTarget(null)}
-                                    className="text-gray-400 hover:text-white px-4 py-2"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    <DeleteConfirmationModal
+                        onClose={() => setDeleteTarget(null)}
+                        onConfirm={handleDeleteSession}
+                    />
                 )}
             </div>
         </div>
@@ -487,5 +457,44 @@ function AddSessionForm({ courses, semester, onClose, onAdd }) {
                 </button>
             </div>
         </form>
+    );
+}
+
+function DeleteConfirmationModal({ onClose, onConfirm }) {
+    return (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+            <div className="glass-card w-full max-w-md p-6">
+                <h2 className="text-xl font-bold mb-2">Delete Session</h2>
+                <p className="text-gray-400 mb-6">
+                    How would you like to delete this session?
+                </p>
+
+                <div className="space-y-3">
+                    <button
+                        onClick={() => onConfirm('single')}
+                        className="w-full btn-secondary text-left flex items-center justify-between group"
+                    >
+                        <span>Delete this instance only</span>
+                        <Trash2 size={16} className="text-gray-400 group-hover:text-red-400" />
+                    </button>
+                    <button
+                        onClick={() => onConfirm('future')}
+                        className="w-full btn-secondary text-left flex items-center justify-between group"
+                    >
+                        <span>Delete this and all future instances</span>
+                        <Trash2 size={16} className="text-gray-400 group-hover:text-red-400" />
+                    </button>
+                </div>
+
+                <div className="flex justify-end mt-6">
+                    <button
+                        onClick={onClose}
+                        className="text-gray-400 hover:text-white px-4 py-2"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }
