@@ -340,8 +340,8 @@ export default function SemesterDetail() {
 
                 {/* Delete Confirmation Modal */}
                 {deleteTarget && (
-                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-                        <div className="glass-card w-full max-w-md p-6">
+                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={() => setDeleteTarget(null)}>
+                        <div className="glass-card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
                             <h2 className="text-xl font-bold mb-2">Delete Session</h2>
                             <p className="text-gray-400 mb-6">
                                 How would you like to delete this session?
