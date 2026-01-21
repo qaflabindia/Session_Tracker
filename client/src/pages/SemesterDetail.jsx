@@ -69,7 +69,8 @@ export default function SemesterDetail() {
                 date: formData.get('date'),
                 start_time: formData.get('start_time'),
                 end_time: formData.get('end_time'),
-                repeat_weekly: formData.get('repeat_weekly') === 'on'
+                repeat_weekly: formData.get('repeat_weekly') === 'on',
+                repeat_until: formData.get('repeat_until')
             });
             setIsAddModalOpen(false);
             loadData();
@@ -324,7 +325,7 @@ export default function SemesterDetail() {
 
                 {/* Add Session Modal */}
                 {isAddModalOpen && (
-                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
                         <div className="glass-card w-full max-w-md p-6">
                             <h2 className="text-xl font-bold mb-4">Add Session</h2>
                             <form onSubmit={handleAddSession} className="space-y-4">
@@ -337,16 +338,7 @@ export default function SemesterDetail() {
                                         ))}
                                     </select>
                                 </div>
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Date</label>
-                                    <input
-                                        type="date"
-                                        name="date"
-                                        required
-                                        className="input-field w-full"
-                                        defaultValue={format(new Date(), 'yyyy-MM-dd')}
-                                    />
-                                </div>
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm text-gray-400 mb-1">Start Time</label>
@@ -357,10 +349,52 @@ export default function SemesterDetail() {
                                         <input type="time" name="end_time" required className="input-field w-full" />
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <input type="checkbox" id="repeat" name="repeat_weekly" className="rounded border-gray-600 bg-gray-700 text-primary-500 focus:ring-primary-500" />
-                                    <label htmlFor="repeat" className="text-sm">Repeat weekly until end of semester</label>
+
+                                <div className="flex items-center gap-2 pt-2">
+                                    <input
+                                        type="checkbox"
+                                        id="repeat"
+                                        name="repeat_weekly"
+                                        className="rounded border-gray-600 bg-gray-700 text-primary-500 focus:ring-primary-500"
+                                        onChange={(e) => {
+                                            const endDateInput = document.getElementById('repeat_end_date');
+                                            if (endDateInput) {
+                                                endDateInput.required = e.target.checked;
+                                                endDateInput.disabled = !e.target.checked;
+                                            }
+                                        }}
+                                    />
+                                    <label htmlFor="repeat" className="text-sm font-medium">Repeat Weekly</label>
                                 </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm text-gray-400 mb-1">From Date</label>
+                                        <input
+                                            type="date"
+                                            name="date"
+                                            required
+                                            className="input-field w-full"
+                                            defaultValue={format(new Date(), 'yyyy-MM-dd')}
+                                            min={format(new Date(), 'yyyy-MM-dd')}
+                                            max={semester?.end_date}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm text-gray-400 mb-1">To Date</label>
+                                        <input
+                                            type="date"
+                                            id="repeat_end_date"
+                                            name="repeat_until"
+                                            className="input-field w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                                            defaultValue={semester?.end_date}
+                                            min={format(new Date(), 'yyyy-MM-dd')}
+                                            max={semester?.end_date}
+                                            disabled
+                                        />
+                                    </div>
+                                </div>
+
                                 <div className="flex justify-end gap-3 mt-6">
                                     <button
                                         type="button"
@@ -370,7 +404,7 @@ export default function SemesterDetail() {
                                         Cancel
                                     </button>
                                     <button type="submit" className="btn-primary">
-                                        Add Session
+                                        Add Session(s)
                                     </button>
                                 </div>
                             </form>
@@ -380,7 +414,7 @@ export default function SemesterDetail() {
 
                 {/* Delete Confirmation Modal */}
                 {deleteTarget && (
-                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
                         <div className="glass-card w-full max-w-md p-6">
                             <h2 className="text-xl font-bold mb-2">Delete Session</h2>
                             <p className="text-gray-400 mb-6">

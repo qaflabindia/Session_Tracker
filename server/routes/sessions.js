@@ -9,7 +9,7 @@ router.use(authMiddleware);
 // Create session (adhoc or recurring)
 router.post('/', (req, res) => {
     try {
-        const { semester_id, course_id, date, start_time, end_time, repeat_weekly } = req.body;
+        const { semester_id, course_id, date, start_time, end_time, repeat_weekly, repeat_until } = req.body;
 
         if (!semester_id || !course_id || !date || !start_time || !end_time) {
             return res.status(400).json({ error: 'Missing required fields' });
@@ -24,22 +24,26 @@ router.post('/', (req, res) => {
 
         const createSessions = db.transaction(() => {
             const insert = db.prepare(`
-                INSERT INTO sessions (id, semester_id, course_id, date, start_time, end_time, status, type)
-                VALUES (?, ?, ?, ?, ?, ?, 'scheduled', 'manual')
+                INSERT INTO sessions (semester_id, course_id, date, start_time, end_time, status)
+                VALUES (?, ?, ?, ?, ?, 'scheduled')
             `);
 
             // 1. Insert the primary session
-            const crypto = require('crypto');
-            insert.run(crypto.randomUUID(), semester_id, course_id, date, start_time, end_time);
+            insert.run(semester_id, course_id, date, start_time, end_time);
 
             // 2. Propagate if requested
             if (repeat_weekly) {
                 let currentDate = addWeeks(parseISO(date), 1);
-                const endDate = parseISO(semester.end_date);
+                // Use provided repeat_until or default to semester end date
+                let endDate = repeat_until ? parseISO(repeat_until) : parseISO(semester.end_date);
+
+                // Ensure we don't go past the semester end date
+                if (isAfter(endDate, parseISO(semester.end_date))) {
+                    endDate = parseISO(semester.end_date);
+                }
 
                 while (!isAfter(currentDate, endDate)) {
                     insert.run(
-                        crypto.randomUUID(),
                         semester_id,
                         course_id,
                         format(currentDate, 'yyyy-MM-dd'),
@@ -75,30 +79,24 @@ router.delete('/:id', (req, res) => {
 
         const deleteOp = db.transaction(() => {
             if (mode === 'future') {
-                // Delete this session and all future sessions of same course/time
-                // We use course_id, start_time, end_time, and Day of Week logic to identify the series.
-                // However, strictly "same series" implies checking the day of week.
-                const targetDayOfWeek = getDay(parseISO(session.date));
+                console.log(`[DELETE] Starting future delete for session ${session.id}, date: ${session.date}`);
 
-                // Find all candidates
-                const candidates = db.prepare(`
-                    SELECT * FROM sessions 
+                // Delete this session and all future sessions of same course/time AND Same Day of Week
+                // We use SQL strftime('%w', date) to ensure we match the day of week reliably
+
+                // Find all candidates and delete them in one go
+                const result = db.prepare(`
+                    DELETE FROM sessions 
                     WHERE course_id = ? 
                     AND start_time = ? 
                     AND end_time = ? 
                     AND date >= ?
                     AND semester_id = ?
-                `).all(session.course_id, session.start_time, session.end_time, session.date, session.semester_id);
+                    AND strftime('%w', date) = strftime('%w', ?)
+                `).run(session.course_id, session.start_time, session.end_time, session.date, session.semester_id, session.date);
 
-                // Filter by day of week in JS to be safe (sqlite strftime %w is 0-6, date-fns getDay is 0-6)
-                const idsToDelete = candidates
-                    .filter(s => getDay(parseISO(s.date)) === targetDayOfWeek)
-                    .map(s => s.id);
+                console.log(`[DELETE] Deleted ${result.changes} sessions`);
 
-                if (idsToDelete.length > 0) {
-                    const placeholders = idsToDelete.map(() => '?').join(',');
-                    db.prepare(`DELETE FROM sessions WHERE id IN (${placeholders})`).run(...idsToDelete);
-                }
             } else {
                 // Single delete
                 db.prepare('DELETE FROM sessions WHERE id = ?').run(req.params.id);
