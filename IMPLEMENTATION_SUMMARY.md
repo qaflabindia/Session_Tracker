@@ -35,7 +35,7 @@
 - ✅ CSV export functionality
 - ✅ Course-wise and semester-wide analytics
 - ⚠️ PDF export (data endpoint ready, PDF generation deferred)
-- ⚠️ AI-assisted timetable parsing (deferred to future version)
+- ✅ AI-assisted timetable parsing (integrated with strict extraction rules)
 
 ### Phase 5: Polish & Deployment ✓
 - ✅ Mobile-responsive design
@@ -204,7 +204,6 @@ npm run dev
 ## 🔮 Future Enhancements (Not in v1)
 
 ### Deferred Features
-- [ ] AI-assisted timetable parsing (Claude API integration)
 - [ ] PDF export generation
 - [ ] Push notifications
 - [ ] Calendar integration (Google Calendar, iCal)
@@ -249,7 +248,7 @@ Login page verified with:
 - ✅ Manual attendance marking
 - ✅ Analytics and export
 - ✅ Multi-semester support
-- ❌ AI timetable ingestion (deferred)
+- ✅ AI timetable ingestion (Smart parsing with duplicate detection)
 
 ### Assumptions Validated
 - ✅ User is sole authority
@@ -270,11 +269,11 @@ All entities implemented as specified in the design document.
 
 ## 📊 Current Status
 
-**Version**: 1.0.0  
-**Status**: MVP Complete ✅  
+**Version**: 1.1.0  
+**Status**: MVP Complete + AI Features ✅  
 **Environment**: Development  
 **Database**: SQLite (WAL mode)  
-**Last Updated**: 2026-01-19
+**Last Updated**: 2026-01-22
 
 ## 🎓 Usage Example
 
