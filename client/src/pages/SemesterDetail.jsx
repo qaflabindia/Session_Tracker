@@ -371,7 +371,7 @@ function AddSessionForm({ courses, semester, onClose, onAdd }) {
             onAdd();
         } catch (error) {
             console.error('Failed to create session:', error);
-            alert('Failed to create session');
+            alert(error.response?.data?.error || 'Failed to create session');
         }
     };
 

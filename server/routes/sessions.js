@@ -22,6 +22,27 @@ router.post('/', (req, res) => {
         const course = db.prepare('SELECT * FROM courses WHERE id = ? AND semester_id = ?').get(course_id, semester_id);
         if (!course) return res.status(404).json({ error: 'Course not found' });
 
+        // Helper check for conflicts
+        const checkConflict = (checkDate, checkStart, checkEnd) => {
+            const conflict = db.prepare(`
+                SELECT * FROM sessions 
+                WHERE semester_id = ? 
+                AND date = ? 
+                AND (
+                    (start_time <= ? AND end_time > ?) OR
+                    (start_time < ? AND end_time >= ?) OR
+                    (start_time >= ? AND end_time <= ?)
+                )
+            `).get(
+                semester_id,
+                checkDate,
+                checkStart, checkStart,
+                checkEnd, checkEnd,
+                checkStart, checkEnd
+            );
+            return conflict;
+        };
+
         const createSessions = db.transaction(() => {
             const insert = db.prepare(`
                 INSERT INTO sessions (semester_id, course_id, date, start_time, end_time, status)
@@ -29,6 +50,10 @@ router.post('/', (req, res) => {
             `);
 
             // 1. Insert the primary session
+            const primaryConflict = checkConflict(date, start_time, end_time);
+            if (primaryConflict) {
+                throw new Error(`Conflict detected on ${date} between ${start_time} - ${end_time}`);
+            }
             insert.run(semester_id, course_id, date, start_time, end_time);
 
             // 2. Propagate if requested
@@ -43,10 +68,16 @@ router.post('/', (req, res) => {
                 }
 
                 while (!isAfter(currentDate, endDate)) {
+                    const nextDate = format(currentDate, 'yyyy-MM-dd');
+                    const conflict = checkConflict(nextDate, start_time, end_time);
+                    if (conflict) {
+                        throw new Error(`Conflict detected on ${nextDate} for repeating session`);
+                    }
+
                     insert.run(
                         semester_id,
                         course_id,
-                        format(currentDate, 'yyyy-MM-dd'),
+                        nextDate,
                         start_time,
                         end_time
                     );
@@ -60,6 +91,9 @@ router.post('/', (req, res) => {
 
     } catch (error) {
         console.error('Create session error:', error);
+        if (error.message.includes('Conflict detected')) {
+            return res.status(409).json({ error: error.message });
+        }
         res.status(500).json({ error: 'Failed to create session' });
     }
 });
