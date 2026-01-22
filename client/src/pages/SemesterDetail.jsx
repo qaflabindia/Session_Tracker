@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { semesters as semestersAPI, courses as coursesAPI, sessions as sessionsAPI } from '../api/client';
-import { format, parseISO, startOfWeek, endOfWeek, addDays, isSameDay, isAfter, startOfDay, differenceInMinutes, parse, getHours, getMinutes } from 'date-fns';
+import { format, parseISO, startOfWeek, endOfWeek, addDays, isSameDay, isAfter, startOfDay, differenceInMinutes, parse, getHours, getMinutes, addHours } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar, Plus, Settings, BarChart3, Check, X, Ban, Trash2 } from 'lucide-react';
 
 export default function SemesterDetail() {
@@ -376,6 +376,9 @@ function AddSessionForm({ courses, semester, onClose, onAdd }) {
     };
 
     const today = format(new Date(), 'yyyy-MM-dd');
+    const now = new Date();
+    const currentTime = format(now, 'HH:mm');
+    const oneHourLater = format(addHours(now, 1), 'HH:mm');
     const minDate = (semester?.start_date && semester.start_date > today) ? semester.start_date : today;
 
     return (
@@ -393,11 +396,23 @@ function AddSessionForm({ courses, semester, onClose, onAdd }) {
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label className="block text-sm text-gray-400 mb-1">Start Time</label>
-                    <input type="time" name="start_time" required className="input-field w-full" />
+                    <input
+                        type="time"
+                        name="start_time"
+                        required
+                        className="input-field w-full"
+                        defaultValue={currentTime}
+                    />
                 </div>
                 <div>
                     <label className="block text-sm text-gray-400 mb-1">End Time</label>
-                    <input type="time" name="end_time" required className="input-field w-full" />
+                    <input
+                        type="time"
+                        name="end_time"
+                        required
+                        className="input-field w-full"
+                        defaultValue={oneHourLater}
+                    />
                 </div>
             </div>
 
