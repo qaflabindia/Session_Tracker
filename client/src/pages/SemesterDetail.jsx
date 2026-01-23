@@ -220,7 +220,7 @@ export default function SemesterDetail() {
                                     </p>
                                 </div>
 
-                                <div className="relative min-h-[900px]">
+                                <div className="relative min-h-[1000px]">
                                     {daySessions.length === 0 ? (
                                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                             <p className="text-xs text-gray-500/30 font-medium">No sessions</p>
@@ -238,9 +238,18 @@ export default function SemesterDetail() {
                                             const endMinutes = getHours(end) * 60 + getMinutes(end);
                                             const refMinutes = 8 * 60; // 8:00 AM
 
-                                            const topPx = (startMinutes - refMinutes) * 1.5;
+                                            // GUARD RAIL: Prevent slots from going "above" the calendar (negative top)
+                                            let topPx = Math.max(0, (startMinutes - refMinutes) * 1.5);
+
                                             const durationMinutes = endMinutes - startMinutes;
-                                            const heightPx = Math.max(60, durationMinutes * 1.5); // Min height 60px
+                                            // GUARD RAIL: Max height check to align with container
+                                            const containerH = 1000;
+                                            let heightPx = Math.max(60, durationMinutes * 1.5); // Min height 60px
+
+                                            // Ensure it doesn't overflow bottom
+                                            if (topPx + heightPx > containerH) {
+                                                heightPx = containerH - topPx;
+                                            }
 
                                             return (
                                                 <div
@@ -251,7 +260,9 @@ export default function SemesterDetail() {
                                                         borderColor: `${course?.color}40`,
                                                         top: `${topPx}px`,
                                                         height: `${heightPx}px`,
-                                                        minHeight: '60px'
+                                                        minHeight: '60px',
+                                                        maxHeight: `${containerH}px`,
+                                                        overflow: 'hidden'
                                                     }}
                                                 >
                                                     {/* Tooltip */}
