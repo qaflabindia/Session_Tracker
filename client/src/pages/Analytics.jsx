@@ -12,6 +12,7 @@ export default function Analytics() {
 
     const [analytics, setAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [viewMode, setViewMode] = useState('total'); // 'total' | 'to_date'
 
     useEffect(() => {
         loadAnalytics();
@@ -40,11 +41,16 @@ export default function Analytics() {
         );
     }
 
+    // Helper to get correct stats based on view mode
+    const getStats = (data) => data ? data[viewMode] : null;
+
+    const currentOverall = getStats(analytics.overall);
+
     const overallData = [
-        { name: 'Attended', value: analytics.overall.attended, color: '#10b981' },
-        { name: 'Missed', value: analytics.overall.missed, color: '#ef4444' },
-        { name: 'Cancelled', value: analytics.overall.cancelled, color: '#f59e0b' },
-        { name: 'Scheduled', value: analytics.overall.scheduled, color: '#3b82f6' },
+        { name: 'Attended', value: currentOverall.attended, color: '#10b981' },
+        { name: 'Missed', value: currentOverall.missed, color: '#ef4444' },
+        { name: 'Cancelled', value: currentOverall.cancelled, color: '#f59e0b' },
+        { name: 'Scheduled', value: currentOverall.scheduled, color: '#3b82f6' },
     ];
 
     return (
@@ -58,39 +64,59 @@ export default function Analytics() {
                     Back to Semester
                 </button>
 
-                <div className="flex justify-between items-center mb-8">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                     <div>
                         <h1 className="text-3xl font-bold mb-2">Analytics</h1>
                         <p className="text-gray-400">Attendance insights and statistics</p>
                     </div>
 
-                    <button
-                        onClick={downloadCSV}
-                        className="btn-primary flex items-center gap-2"
-                    >
-                        <Download size={20} />
-                        Export CSV
-                    </button>
+                    <div className="flex items-center gap-4">
+                        {/* Toggle View Mode */}
+                        <div className="bg-white/5 p-1 rounded-lg flex items-center">
+                            <button
+                                onClick={() => setViewMode('total')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${viewMode === 'total' ? 'bg-primary-500 text-white shadow-lg' : 'text-gray-400 hover:text-white'
+                                    }`}
+                            >
+                                Total Semester
+                            </button>
+                            <button
+                                onClick={() => setViewMode('to_date')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${viewMode === 'to_date' ? 'bg-primary-500 text-white shadow-lg' : 'text-gray-400 hover:text-white'
+                                    }`}
+                            >
+                                Session to Date
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={downloadCSV}
+                            className="btn-primary flex items-center gap-2"
+                        >
+                            <Download size={20} />
+                            Export CSV
+                        </button>
+                    </div>
                 </div>
 
                 {/* Overall Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                     <div className="glass-card p-6">
                         <p className="text-sm text-gray-400 mb-1">Total Sessions</p>
-                        <p className="text-3xl font-bold">{analytics.overall.total_sessions}</p>
+                        <p className="text-3xl font-bold">{currentOverall.total_sessions}</p>
                     </div>
                     <div className="glass-card p-6">
                         <p className="text-sm text-gray-400 mb-1">Attended</p>
-                        <p className="text-3xl font-bold text-green-400">{analytics.overall.attended}</p>
+                        <p className="text-3xl font-bold text-green-400">{currentOverall.attended}</p>
                     </div>
                     <div className="glass-card p-6">
                         <p className="text-sm text-gray-400 mb-1">Missed</p>
-                        <p className="text-3xl font-bold text-red-400">{analytics.overall.missed}</p>
+                        <p className="text-3xl font-bold text-red-400">{currentOverall.missed}</p>
                     </div>
                     <div className="glass-card p-6">
                         <p className="text-sm text-gray-400 mb-1">Attendance Rate</p>
                         <p className="text-3xl font-bold text-primary-400">
-                            {analytics.overall.attendance_percentage}%
+                            {currentOverall.attendance_percentage}%
                         </p>
                     </div>
                 </div>
@@ -147,8 +173,9 @@ export default function Analytics() {
                     <h3 className="text-lg font-semibold mb-4">Course-wise Attendance</h3>
                     <div className="space-y-4">
                         {analytics.by_course.map((course) => {
-                            const validSessions = course.total_sessions - course.cancelled;
-                            const percentage = course.attendance_percentage;
+                            const stats = getStats(course);
+                            const validSessions = stats.total_sessions - stats.cancelled;
+                            const percentage = stats.attendance_percentage;
 
                             return (
                                 <div key={course.id} className="bg-white/5 p-4 rounded-lg">
@@ -166,7 +193,7 @@ export default function Analytics() {
                                         <div className="text-right">
                                             <p className="text-lg font-semibold">{percentage}%</p>
                                             <p className="text-xs text-gray-400">
-                                                {course.attended}/{validSessions} sessions
+                                                {stats.attended}/{validSessions} sessions
                                             </p>
                                         </div>
                                     </div>
