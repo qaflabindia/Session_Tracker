@@ -277,6 +277,14 @@ CRITICAL INSTRUCTIONS:
    - Afternoon slots (12:00-18:00)
    - Evening slots (18:00-22:00)
 
+   CRITICAL TIME FORMATTING RULE:
+   - If you see times like "1:00", "2:00", "3:20", "4:10", "5:00" in an afternoon column:
+   - THESE ARE PM TIMES. You MUST convert them to 24-hour format.
+   - Example directly: "1:00" -> "13:00"
+   - Example directly: "2:20" -> "14:20"
+   - Example directly: "03:20" -> "15:20"
+   - DO NOT output "01:00" for an afternoon class! University classes do not happen at 1 AM.
+
 3. EXTRACT EVERY CELL in the timetable grid:
    - Read the ENTIRE grid from left to right, top to bottom
    - DO NOT stop after the first column (Monday)
@@ -434,7 +442,40 @@ Return JSON with ALL instances from ALL days:
     const jsonMatch = response.choices[0].message.content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('Failed to extract JSON from schedule');
 
-    return JSON.parse(jsonMatch[0]);
+    const result = JSON.parse(jsonMatch[0]);
+
+    // GUARD RAIL: Fix AM/PM confusion
+    if (result.schedules && Array.isArray(result.schedules)) {
+      result.schedules = this.enforcePMGuardRails(result.schedules);
+    }
+
+    return result;
+  }
+
+  /**
+   * Post-processing guard rail to fix AM/PM confusion
+   * If time is between 01:00 and 06:59, convert to PM (add 12h)
+   * Assumption: No university classes happen at 1 AM - 6 AM
+   */
+  enforcePMGuardRails(schedules) {
+    return schedules.map(schedule => {
+      const fixTime = (timeStr) => {
+        if (!timeStr || !timeStr.includes(':')) return timeStr;
+        const [hours, minutes] = timeStr.split(':').map(Number);
+
+        // If hour is 1, 2, 3, 4, 5, 6 -> likely afternoon (13, 14, 15, 16, 17, 18)
+        if (hours >= 1 && hours <= 6) {
+          return `${hours + 12}:${minutes.toString().padStart(2, '0')}`;
+        }
+        return timeStr; // Keep 8, 9, 10, 11, 12 as is
+      };
+
+      return {
+        ...schedule,
+        start_time: fixTime(schedule.start_time),
+        end_time: fixTime(schedule.end_time)
+      };
+    });
   }
 
   /**
