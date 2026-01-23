@@ -207,7 +207,26 @@ export default function SemesterDetail() {
                 {/* Weekly Calendar */}
                 <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
                     {weekDays.map((day, index) => {
-                        const daySessions = getSessionsForDay(day);
+                        const rawSessions = getSessionsForDay(day);
+                        // Sort by start time
+                        const sortedSessions = [...rawSessions].sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+                        // Calculate visual overlaps
+                        const daySessions = sortedSessions.map((session, index) => {
+                            const start = parse(session.start_time, 'HH:mm', new Date());
+                            const end = parse(session.end_time, 'HH:mm', new Date());
+                            const startMinutes = getHours(start) * 60 + getMinutes(start);
+                            const endMinutes = getHours(end) * 60 + getMinutes(end);
+
+                            let overlapLevel = 0;
+                            for (let i = 0; i < index; i++) {
+                                const prev = sortedSessions[i];
+                                const prevEnd = parse(prev.end_time, 'HH:mm', new Date());
+                                const prevEndMinutes = getHours(prevEnd) * 60 + getMinutes(prevEnd);
+                                if (startMinutes < prevEndMinutes) overlapLevel++;
+                            }
+                            return { ...session, startMinutes, endMinutes, overlapLevel };
+                        });
                         const isToday = isSameDay(day, new Date());
                         const isFuture = isAfter(startOfDay(day), startOfDay(new Date()));
 
@@ -229,13 +248,6 @@ export default function SemesterDetail() {
                                         daySessions.map((session) => {
                                             const course = courses.find(c => c.id === session.course_id);
 
-                                            // Calculate position and height
-                                            // Reference time: 8:00 AM
-                                            const start = parse(session.start_time, 'HH:mm', new Date());
-                                            const end = parse(session.end_time, 'HH:mm', new Date());
-
-                                            const startMinutes = getHours(start) * 60 + getMinutes(start);
-                                            const endMinutes = getHours(end) * 60 + getMinutes(end);
                                             const refMinutes = 8 * 60; // 8:00 AM
 
                                             // GUARD RAIL: Prevent slots from going "above" the calendar (negative top)
@@ -251,10 +263,15 @@ export default function SemesterDetail() {
                                                 heightPx = containerH - topPx;
                                             }
 
+                                            // Visual Offset for overlaps
+                                            const indent = Math.min(session.overlapLevel, 3);
+                                            const leftPct = indent * 15;
+                                            const widthPct = 100 - leftPct;
+
                                             return (
                                                 <div
                                                     key={session.id}
-                                                    className="absolute w-full p-2 rounded-lg border transition-all hover:z-50 hover:shadow-lg flex flex-col group"
+                                                    className="absolute p-2 rounded-lg border transition-all hover:z-50 hover:shadow-lg flex flex-col group"
                                                     style={{
                                                         backgroundColor: `${course?.color}20`,
                                                         borderColor: `${course?.color}40`,
@@ -262,7 +279,10 @@ export default function SemesterDetail() {
                                                         height: `${heightPx}px`,
                                                         minHeight: '60px',
                                                         maxHeight: `${containerH}px`,
-                                                        overflow: 'hidden'
+                                                        overflow: 'hidden',
+                                                        left: `${leftPct}%`,
+                                                        width: `${widthPct}%`,
+                                                        zIndex: 10 + indent
                                                     }}
                                                 >
                                                     {/* Tooltip */}
