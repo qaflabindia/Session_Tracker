@@ -585,6 +585,15 @@ MANDATORY CHECKS:
       }
 
       const extracted = JSON.parse(jsonMatch[0]);
+
+      // GUARD RAIL: Fix AM/PM confusion for all courses
+      if (extracted.courses && Array.isArray(extracted.courses)) {
+        extracted.courses.forEach(course => {
+          if (course.schedules && Array.isArray(course.schedules)) {
+            course.schedules = this.enforcePMGuardRails(course.schedules);
+          }
+        });
+      }
       if (extracted.confidence < 0.85) {
         extracted.warning = 'Low confidence extraction. Please verify all fields carefully.';
       }
@@ -665,6 +674,12 @@ RULES:
       }
 
       const extracted = JSON.parse(jsonMatch[0]);
+
+      // GUARD RAIL: Fix AM/PM confusion
+      if (extracted.schedules && Array.isArray(extracted.schedules)) {
+        extracted.schedules = this.enforcePMGuardRails(extracted.schedules);
+      }
+
       if (extracted.confidence < 0.85) {
         extracted.warning = 'Low confidence extraction. Please verify all fields carefully.';
       }
