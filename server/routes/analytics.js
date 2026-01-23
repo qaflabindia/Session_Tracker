@@ -20,7 +20,8 @@ router.get('/semester/:semesterId', (req, res) => {
     }
 
     // Overall attendance percentage
-    const today = new Date().toISOString().split('T')[0];
+    const timezone = semester.timezone || 'UTC';
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
 
     // Overall analytics (Total + To Date)
     const overall = db.prepare(`
@@ -50,12 +51,12 @@ router.get('/semester/:semesterId', (req, res) => {
 
     const overallStats = {
       total: {
-        total_sessions: overall.total_sessions,
-        attended: overall.attended,
-        missed: overall.missed,
-        cancelled: overall.cancelled,
-        scheduled: overall.scheduled,
-        attendance_percentage: parseFloat(calcPercent(overall.attended, overall.total_sessions, overall.cancelled))
+        total_sessions: overall.total_sessions || 0,
+        attended: overall.attended || 0,
+        missed: overall.missed || 0,
+        cancelled: overall.cancelled || 0,
+        scheduled: overall.scheduled || 0,
+        attendance_percentage: parseFloat(calcPercent(overall.attended || 0, overall.total_sessions || 0, overall.cancelled || 0))
       },
       to_date: {
         total_sessions: overall.total_sessions_todate || 0,
@@ -63,7 +64,7 @@ router.get('/semester/:semesterId', (req, res) => {
         missed: overall.missed_todate || 0,
         cancelled: overall.cancelled_todate || 0,
         scheduled: overall.scheduled_todate || 0,
-        attendance_percentage: parseFloat(calcPercent(overall.attended_todate, overall.total_sessions_todate, overall.cancelled_todate))
+        attendance_percentage: parseFloat(calcPercent(overall.attended_todate || 0, overall.total_sessions_todate || 0, overall.cancelled_todate || 0))
       }
     };
 
@@ -88,24 +89,26 @@ router.get('/semester/:semesterId', (req, res) => {
       GROUP BY c.id
     `).all(today, today, today, today, semesterId);
 
+    console.log('Analytics Debug - PerCourse Count:', perCourse.length);
+
     const courseAnalytics = perCourse.map(course => ({
       id: course.id,
       name: course.name,
       code: course.code,
       color: course.color,
       total: {
-        total_sessions: course.total_sessions,
-        attended: course.attended,
-        missed: course.missed,
-        cancelled: course.cancelled,
-        attendance_percentage: parseFloat(calcPercent(course.attended, course.total_sessions, course.cancelled))
+        total_sessions: course.total_sessions || 0,
+        attended: course.attended || 0,
+        missed: course.missed || 0,
+        cancelled: course.cancelled || 0,
+        attendance_percentage: parseFloat(calcPercent(course.attended || 0, course.total_sessions || 0, course.cancelled || 0))
       },
       to_date: {
         total_sessions: course.total_sessions_todate || 0,
         attended: course.attended_todate || 0,
         missed: course.missed_todate || 0,
         cancelled: course.cancelled_todate || 0,
-        attendance_percentage: parseFloat(calcPercent(course.attended_todate, course.total_sessions_todate, course.cancelled_todate))
+        attendance_percentage: parseFloat(calcPercent(course.attended_todate || 0, course.total_sessions_todate || 0, course.cancelled_todate || 0))
       }
     }));
 
@@ -113,21 +116,34 @@ router.get('/semester/:semesterId', (req, res) => {
     const dayOfWeek = db.prepare(`
       SELECT 
         CAST(strftime('%w', date) AS INTEGER) as day_of_week,
+        -- Total
         COUNT(*) as total,
-        SUM(CASE WHEN status = 'attended' THEN 1 ELSE 0 END) as attended
+        SUM(CASE WHEN status = 'attended' THEN 1 ELSE 0 END) as attended,
+        -- To Date
+        SUM(CASE WHEN date <= ? THEN 1 ELSE 0 END) as total_todate,
+        SUM(CASE WHEN date <= ? AND status = 'attended' THEN 1 ELSE 0 END) as attended_todate
       FROM sessions
       WHERE semester_id = ? AND status != 'cancelled'
       GROUP BY day_of_week
       ORDER BY day_of_week
-    `).all(semesterId);
+    `).all(today, today, semesterId);
 
-    const dayHeatmap = dayOfWeek.map(day => ({
-      day: day.day_of_week,
+    const heatmapTotal = dayOfWeek.map(day => ({
       day_name: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][day.day_of_week],
       total: day.total,
-      attended: day.attended,
-      percentage: day.total > 0 ? ((day.attended / day.total) * 100).toFixed(2) : 0
+      attended: day.attended
     }));
+
+    const heatmapToDate = dayOfWeek.map(day => ({
+      day_name: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][day.day_of_week],
+      total: day.total_todate,
+      attended: day.attended_todate
+    }));
+
+    const dayHeatmap = {
+      total: heatmapTotal,
+      to_date: heatmapToDate
+    };
 
     // Time slot density
     const timeSlots = db.prepare(`

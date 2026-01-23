@@ -33,7 +33,7 @@ export default function Analytics() {
         exportData.downloadCSV(id);
     };
 
-    if (loading || !analytics) {
+    if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="spinner"></div>
@@ -41,10 +41,25 @@ export default function Analytics() {
         );
     }
 
-    // Helper to get correct stats based on view mode
-    const getStats = (data) => data ? data[viewMode] : null;
+    if (!analytics) {
+        return (
+            <div className="flex items-center justify-center min-h-screen text-red-400">
+                <p>Failed to load analytics data.</p>
+            </div>
+        );
+    }
 
-    const currentOverall = getStats(analytics.overall);
+    // Helper to get correct stats based on view mode
+    const getStats = (data) => data ? (data[viewMode] || null) : null;
+
+    const currentOverall = getStats(analytics.overall) || {
+        total_sessions: 0,
+        attended: 0,
+        missed: 0,
+        cancelled: 0,
+        scheduled: 0,
+        attendance_percentage: 0
+    };
 
     const overallData = [
         { name: 'Attended', value: currentOverall.attended, color: '#10b981' },
@@ -132,14 +147,15 @@ export default function Analytics() {
                                     data={overallData}
                                     cx="50%"
                                     cy="50%"
-                                    labelLine={false}
-                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                    innerRadius={60}
                                     outerRadius={80}
-                                    fill="#8884d8"
+                                    paddingAngle={5}
+                                    cornerRadius={5}
                                     dataKey="value"
+                                    label={({ name, percent }) => percent > 0 ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
                                 >
                                     {overallData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                        <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
                                     ))}
                                 </Pie>
                                 <Tooltip />
@@ -151,7 +167,7 @@ export default function Analytics() {
                     <div className="glass-card p-6">
                         <h3 className="text-lg font-semibold mb-4">Attendance by Day</h3>
                         <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={analytics.day_heatmap}>
+                            <BarChart data={analytics.day_heatmap[viewMode]}>
                                 <XAxis dataKey="day_name" tick={{ fill: '#9ca3af' }} />
                                 <YAxis tick={{ fill: '#9ca3af' }} />
                                 <Tooltip
@@ -173,7 +189,13 @@ export default function Analytics() {
                     <h3 className="text-lg font-semibold mb-4">Course-wise Attendance</h3>
                     <div className="space-y-4">
                         {analytics.by_course.map((course) => {
-                            const stats = getStats(course);
+                            const stats = getStats(course) || {
+                                total_sessions: 0,
+                                attended: 0,
+                                missed: 0,
+                                cancelled: 0,
+                                attendance_percentage: 0
+                            };
                             const validSessions = stats.total_sessions - stats.cancelled;
                             const percentage = stats.attendance_percentage;
 

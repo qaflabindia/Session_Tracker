@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { semesters as semestersAPI, courses as coursesAPI, sessions as sessionsAPI } from '../api/client';
 import { format, parseISO, startOfWeek, endOfWeek, addDays, isSameDay, isAfter, startOfDay, differenceInMinutes, parse, getHours, getMinutes, addHours } from 'date-fns';
-import { ChevronLeft, ChevronRight, Calendar, Plus, Settings, BarChart3, Check, X, Ban, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Plus, Settings, BarChart3, Check, X, Ban, Trash2, AlertTriangle } from 'lucide-react';
 
 export default function SemesterDetail() {
     const { id } = useParams();
@@ -93,7 +93,7 @@ export default function SemesterDetail() {
     };
 
     const getSessionsForDay = (date) => {
-        return sessions.filter(s => isSameDay(parseISO(s.date), date));
+        return sessions.filter(s => s && s.date && isSameDay(parseISO(s.date), date));
     };
 
     const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
@@ -208,25 +208,47 @@ export default function SemesterDetail() {
                 <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
                     {weekDays.map((day, index) => {
                         const rawSessions = getSessionsForDay(day);
-                        // Sort by start time
-                        const sortedSessions = [...rawSessions].sort((a, b) => a.start_time.localeCompare(b.start_time));
+                        // Filter valid sessions and sort by start time
+                        const sortedSessions = [...rawSessions]
+                            .filter(s => s.start_time && s.end_time)
+                            .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
                         // Calculate visual overlaps
-                        const daySessions = sortedSessions.map((session, index) => {
-                            const start = parse(session.start_time, 'HH:mm', new Date());
-                            const end = parse(session.end_time, 'HH:mm', new Date());
-                            const startMinutes = getHours(start) * 60 + getMinutes(start);
-                            const endMinutes = getHours(end) * 60 + getMinutes(end);
+                        let daySessions = [];
+                        try {
+                            daySessions = sortedSessions.map((session, index) => {
+                                const start = parse(session.start_time, 'HH:mm', new Date());
+                                const end = parse(session.end_time, 'HH:mm', new Date());
+                                const startMinutes = getHours(start) * 60 + getMinutes(start);
+                                const endMinutes = getHours(end) * 60 + getMinutes(end);
 
-                            let overlapLevel = 0;
-                            for (let i = 0; i < index; i++) {
-                                const prev = sortedSessions[i];
-                                const prevEnd = parse(prev.end_time, 'HH:mm', new Date());
-                                const prevEndMinutes = getHours(prevEnd) * 60 + getMinutes(prevEnd);
-                                if (startMinutes < prevEndMinutes) overlapLevel++;
-                            }
-                            return { ...session, startMinutes, endMinutes, overlapLevel };
-                        });
+                                let overlapLevel = 0;
+                                let hasConflict = false;
+
+                                // Check against all other sessions for conflict
+                                sortedSessions.forEach((other, otherIndex) => {
+                                    if (index === otherIndex) return;
+
+                                    const otherStart = parse(other.start_time, 'HH:mm', new Date());
+                                    const otherEnd = parse(other.end_time, 'HH:mm', new Date());
+                                    const otherStartMinutes = getHours(otherStart) * 60 + getMinutes(otherStart);
+                                    const otherEndMinutes = getHours(otherEnd) * 60 + getMinutes(otherEnd);
+
+                                    // Check for overlap intersection
+                                    if (startMinutes < otherEndMinutes && endMinutes > otherStartMinutes) {
+                                        hasConflict = true;
+                                        // Only increment indent level for previous overlapping sessions (to stagger)
+                                        if (otherIndex < index) {
+                                            overlapLevel++;
+                                        }
+                                    }
+                                });
+
+                                return { ...session, startMinutes, endMinutes, overlapLevel, hasConflict };
+                            });
+                        } catch (err) {
+                            console.error('Error in simple daySessions map:', err);
+                        }
                         const isToday = isSameDay(day, new Date());
                         const isFuture = isAfter(startOfDay(day), startOfDay(new Date()));
 
@@ -246,6 +268,7 @@ export default function SemesterDetail() {
                                         </div>
                                     ) : (
                                         daySessions.map((session) => {
+                                            const { startMinutes, endMinutes, overlapLevel } = session;
                                             const course = courses.find(c => c.id === session.course_id);
 
                                             const refMinutes = 8 * 60; // 8:00 AM
@@ -293,16 +316,21 @@ export default function SemesterDetail() {
                                                     </div>
 
                                                     <div className="flex justify-between items-start">
-                                                        <p className="text-xs font-bold leading-tight" style={{ color: course?.color }}>
-                                                            {course?.code}
-                                                        </p>
+                                                        <div className="flex items-center gap-1 min-w-0">
+                                                            <p className="text-xs font-bold leading-tight truncate" style={{ color: course?.color }}>
+                                                                {course?.code}
+                                                            </p>
+                                                            {session.hasConflict && (
+                                                                <AlertTriangle size={12} className="text-amber-500 shrink-0 animate-pulse" />
+                                                            )}
+                                                        </div>
                                                         {/* Delete button (only visible on group hover) */}
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 setDeleteTarget(session);
                                                             }}
-                                                            className="text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            className="text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1"
                                                         >
                                                             <Trash2 size={12} />
                                                         </button>

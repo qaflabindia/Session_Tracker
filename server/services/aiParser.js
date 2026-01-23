@@ -263,14 +263,19 @@ CRITICAL RULES:
 
 CRITICAL INSTRUCTIONS:
 
-1. SCAN ALL DAYS OF THE WEEK:
-   - Monday (day_of_week: 1)
-   - Tuesday (day_of_week: 2)
-   - Wednesday (day_of_week: 3)
-   - Thursday (day_of_week: 4)
-   - Friday (day_of_week: 5)
-   - Saturday (day_of_week: 6) if present
-   - Sunday (day_of_week: 7) if present
+1. DETERMINE GRID ORIENTATION:
+   - CASE A: Days are COLUMNS, Time slots are ROWS (Standard).
+   - CASE B: Time slots are COLUMNS, Days are ROWS (Transposed).
+   - CHECK axis labels carefully. If "Monday, Tuesday..." are on the left (Rows), use CASE B.
+   - Adjust your scanning strategy to match the orientation.
+   - SCAN ALL DAYS detected:
+     - Monday (day_of_week: 1)
+     - Tuesday (day_of_week: 2)
+     - Wednesday (day_of_week: 3)
+     - Thursday (day_of_week: 4)
+     - Friday (day_of_week: 5)
+     - Saturday (day_of_week: 6) if present
+     - Sunday (day_of_week: 7) if present
 
 2. SCAN ALL TIME SLOTS (rows in the grid):
    - Morning slots (08:00-12:00)
@@ -444,7 +449,7 @@ Return JSON with ALL instances from ALL days:
 
     const result = JSON.parse(jsonMatch[0]);
 
-    // GUARD RAIL: Fix AM/PM confusion
+    // GUARD RAIL 1: Fix AM/PM confusion
     if (result.schedules && Array.isArray(result.schedules)) {
       result.schedules = this.enforcePMGuardRails(result.schedules);
     }
@@ -458,16 +463,39 @@ Return JSON with ALL instances from ALL days:
    * Assumption: No university classes happen at 1 AM - 6 AM
    */
   enforcePMGuardRails(schedules) {
+    // 1. Determine Dynamic Threshold
+    // Find the earliest extracted hour that is >= 6 (assuming 6 AM is the absolute earliest valid start).
+    // This allows classes starting at 7 AM, 8 AM, etc., to define the "morning start".
+    const startHours = schedules
+      .map(s => (s.start_time && s.start_time.includes(':') ? parseInt(s.start_time.split(':')[0], 10) : null))
+      .filter(h => h !== null);
+
+    // Identify "Morning Block" (6 AM to 11 AM)
+    const morningStarts = startHours.filter(h => h >= 6 && h < 12);
+
+    // Default cutoff is 8 AM if no morning classes found (safe fallback for afternoon-only schedules).
+    // If morning classes exist, the EARLIEST morning class defines the cutoff.
+    // e.g., if earliest is 7:00, then 1:00, 2:00 (< 7) become PM.
+    // e.g., if earliest is 9:00, then 8:30 (< 9) ??? 
+    // Wait: valid 8:30 implies morningStarts would include 8. So min would be 8.
+    // The only ambiguous case is if we have 1, 2, 3 and NO morning classes. Cutoff 8 handles that.
+    let cutoff = 8;
+    if (morningStarts.length > 0) {
+      cutoff = Math.min(...morningStarts);
+    }
+
+    // 2. Apply Guardrails with Dynamic Cutoff
     return schedules.map(schedule => {
       const fixTime = (timeStr) => {
         if (!timeStr || !timeStr.includes(':')) return timeStr;
         const [hours, minutes] = timeStr.split(':').map(Number);
 
-        // If hour is 1, 2, 3, 4, 5, 6 -> likely afternoon (13, 14, 15, 16, 17, 18)
-        if (hours >= 1 && hours <= 6) {
+        // Usage rule: If hour is strictly less than cutoff, and it's a small number (1-6), treated as PM.
+        // We ensure hour is < 12 prevents messing with proper 24h times or misinterpreting 10,11.
+        if (hours < cutoff && hours < 12) {
           return `${hours + 12}:${minutes.toString().padStart(2, '0')}`;
         }
-        return timeStr; // Keep 8, 9, 10, 11, 12 as is
+        return timeStr;
       };
 
       return {
@@ -477,6 +505,8 @@ Return JSON with ALL instances from ALL days:
       };
     });
   }
+
+
 
   /**
    * Correlate schedules to courses by matching course codes
@@ -521,7 +551,10 @@ Return JSON with ALL instances from ALL days:
             content: `You are a timetable extraction assistant using a Strict Grid Scanning Protocol.
 
 PROTOCOL: CELL-BY-CELL SCANNING
-1.  **Coordinate Mapping**: Visualize the timetable as a grid. Columns = Days (Mon-Fri). Rows = Times.
+1.  **Coordinate Mapping & Orientation**: 
+    - IDENTIFY AXES: Are Days listed as Columns (top header) or Rows (left header)?
+    - IF DAYS ARE ROWS (Left Header): Read across the row for that day to find time slots.
+    - IF DAYS ARE COLUMNS (Top Header): Read down the column for that day.
 2.  **Exhaustive Indexing**: Read EVERY cell from left to right, top to bottom. Do NOT skip.
 3.  **Slot Extraction**: For EACH cell, identify the content (Slot Letter like A, B, C, G, M, etc.).
 4.  **Aggregation**: Group ALL identified cells by their Slot Letter.
@@ -619,8 +652,9 @@ MANDATORY CHECKS:
             content: `You are a timetable extraction assistant. Extract course and schedule information from timetable text.
 
 IMPORTANT: Extract courses and schedules separately:
-1. First identify all UNIQUE courses (by course code)
-2. Then extract all schedule instances that reference these courses
+1. DETECT ORIENTATION: Check if Days are Columns (standard) or Rows (transposed). Adapt scanning direction.
+2. First identify all UNIQUE courses (by course code)
+3. Then extract all schedule instances that reference these courses
 
 Return a JSON object with this exact structure:
 {

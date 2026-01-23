@@ -5,7 +5,7 @@ import {
     courses as coursesAPI,
     schedules as schedulesAPI
 } from '../api/client';
-import { Plus, Trash2, Calendar, ChevronLeft, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Calendar, ChevronLeft, AlertCircle, AlertTriangle } from 'lucide-react';
 
 const COLORS = [
     '#0ea5e9', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981',
@@ -157,6 +157,39 @@ export default function SemesterSetup() {
     };
 
     const propagateSchedule = () => {
+        // Validation: Check for conflicting schedules
+        const flatSchedules = [];
+        Object.entries(schedules).forEach(([courseId, courseScheds]) => {
+            const course = courses.find(c => c.id === parseInt(courseId));
+            if (!course) return;
+            courseScheds.forEach(sched => {
+                flatSchedules.push({ ...sched, courseName: course.name, courseCode: course.code });
+            });
+        });
+
+        for (let i = 0; i < flatSchedules.length; i++) {
+            for (let j = i + 1; j < flatSchedules.length; j++) {
+                const s1 = flatSchedules[i];
+                const s2 = flatSchedules[j];
+
+                if (parseInt(s1.day_of_week) === parseInt(s2.day_of_week)) {
+                    // Check time overlap: Start1 < End2 && End1 > Start2
+                    if (s1.start_time < s2.end_time && s1.end_time > s2.start_time) {
+                        const dayName = DAYS[parseInt(s1.day_of_week) - 1];
+                        setConfirmModal({
+                            isOpen: true,
+                            title: 'Schedule Conflict',
+                            message: `Cannot generate sessions: Conflict detected between ${s1.courseCode} and ${s2.courseCode} on ${dayName} (${s1.start_time} - ${s1.end_time}).\n\nPlease resolve all schedule conflicts before generating sessions.`,
+                            showConfirm: false,
+                            cancelText: 'Cancel', // User specifically asked for "cancel button"
+                            isDangerous: true
+                        });
+                        return; // Block execution
+                    }
+                }
+            }
+        }
+
         setConfirmModal({
             isOpen: true,
             title: 'Generate Sessions',
@@ -424,23 +457,25 @@ export default function SemesterSetup() {
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                         <div className="bg-[#1e1b4b] border border-white/10 rounded-xl p-6 max-w-md w-full shadow-xl">
                             <h3 className="text-xl font-bold mb-2">{confirmModal.title}</h3>
-                            <p className="text-gray-300 mb-6">{confirmModal.message}</p>
+                            <p className="text-gray-300 mb-6 whitespace-pre-line">{confirmModal.message}</p>
                             <div className="flex justify-end gap-3">
                                 <button
                                     onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
                                     className="px-4 py-2 rounded-lg hover:bg-white/10 transition-colors"
                                 >
-                                    Cancel
+                                    {confirmModal.cancelText || 'Cancel'}
                                 </button>
-                                <button
-                                    onClick={confirmModal.onConfirm}
-                                    className={`px-4 py-2 rounded-lg font-medium ${confirmModal.isDangerous
-                                        ? 'bg-red-500 hover:bg-red-600 text-white'
-                                        : 'bg-indigo-500 hover:bg-indigo-600 text-white'
-                                        }`}
-                                >
-                                    Confirm
-                                </button>
+                                {confirmModal.showConfirm !== false && (
+                                    <button
+                                        onClick={confirmModal.onConfirm}
+                                        className={`px-4 py-2 rounded-lg font-medium ${confirmModal.isDangerous
+                                            ? 'bg-red-500 hover:bg-red-600 text-white'
+                                            : 'bg-indigo-500 hover:bg-indigo-600 text-white'
+                                            }`}
+                                    >
+                                        {confirmModal.confirmText || 'Confirm'}
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>
